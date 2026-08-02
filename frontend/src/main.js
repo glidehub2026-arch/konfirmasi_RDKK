@@ -290,7 +290,7 @@ ALUR APLIKASI KONFIRMASI eRDKK (Untuk menjawab pertanyaan pengguna):
 
 PENTING: Jawablah pertanyaan dengan bahasa Indonesia yang ramah, sopan, ringkas, dan jelas.`;
 
-         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`, {
+         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${this.apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
