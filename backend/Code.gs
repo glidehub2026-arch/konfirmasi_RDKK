@@ -147,6 +147,54 @@ function doPost(e) {
       return output.setContent(JSON.stringify({ status: 'success' }));
     }
     
+    // IMPORT ERDKK
+    if (action === 'importErdkk') {
+      const updates = postData.data;
+      const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Alokasi_eRDKK');
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+      
+      const idDesaIdx = headers.indexOf('id_desa');
+      const pupukIdx = headers.indexOf('nama_pupuk');
+      const mt1Idx = headers.indexOf('mt1');
+      const mt2Idx = headers.indexOf('mt2');
+      const mt3Idx = headers.indexOf('mt3');
+      
+      let rowsToAdd = [];
+      let changeLogs = [];
+      const ts = new Date();
+      
+      updates.forEach(u => {
+         let found = false;
+         for (let i = 1; i < data.length; i++) {
+           if (data[i][idDesaIdx] == u.id_desa && data[i][pupukIdx] == u.nama_pupuk) {
+             found = true;
+             sheet.getRange(i + 1, mt1Idx + 1).setValue(u.mt1);
+             sheet.getRange(i + 1, mt2Idx + 1).setValue(u.mt2);
+             sheet.getRange(i + 1, mt3Idx + 1).setValue(u.mt3);
+             
+             changeLogs.push([ts, 'Admin', u.id_desa, u.nama_pupuk, 'Mass Import', 'Old', `${u.mt1}, ${u.mt2}, ${u.mt3}`]);
+             break;
+           }
+         }
+         if (!found) {
+           rowsToAdd.push([u.id_desa, u.nama_pupuk, u.mt1, u.mt2, u.mt3]);
+           changeLogs.push([ts, 'Admin', u.id_desa, u.nama_pupuk, 'New Row', 'None', `${u.mt1}, ${u.mt2}, ${u.mt3}`]);
+         }
+      });
+      
+      if (rowsToAdd.length > 0) {
+         sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAdd.length, headers.length).setValues(rowsToAdd);
+      }
+      
+      if (changeLogs.length > 0) {
+         const sheetLog = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Log_Perubahan');
+         sheetLog.getRange(sheetLog.getLastRow() + 1, 1, changeLogs.length, 7).setValues(changeLogs);
+      }
+      
+      return output.setContent(JSON.stringify({ status: 'success' }));
+    }
+    
     // CONFIRM DATA
     if (action === 'confirmData') {
       const sheetPPTS = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('PPTS');
