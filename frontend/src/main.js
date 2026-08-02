@@ -103,7 +103,18 @@ Alpine.data('appData', () => ({
             const res = await fetch(GAS_URL + '?action=getERDKK&id_ppts=' + this.selectedPpts);
             const json = await res.json();
             if (json.status === 'success') {
-               this.erdkkList = json.data;
+               this.erdkkList = json.data.map(d => ({
+                  ...d,
+                  mt1_urea: d.alokasi?.mt1?.['Urea'] || 0,
+                  mt1_npk: d.alokasi?.mt1?.['NPK'] || 0,
+                  mt1_organik: d.alokasi?.mt1?.['Organik'] || 0,
+                  mt2_urea: d.alokasi?.mt2?.['Urea'] || 0,
+                  mt2_npk: d.alokasi?.mt2?.['NPK'] || 0,
+                  mt2_organik: d.alokasi?.mt2?.['Organik'] || 0,
+                  mt3_urea: d.alokasi?.mt3?.['Urea'] || 0,
+                  mt3_npk: d.alokasi?.mt3?.['NPK'] || 0,
+                  mt3_organik: d.alokasi?.mt3?.['Organik'] || 0
+               }));
                this.view = 'data';
             } else {
                throw new Error(json.message);
@@ -130,9 +141,12 @@ Alpine.data('appData', () => ({
       const original = this.erdkkList.find(d => d.id_desa === this.editingDesa.id_desa);
       keys.forEach(key => {
          if (original[key] != this.editingDesa[key]) {
+            const parts = key.split('_'); // 'mt1', 'urea'
+            const pupukMap = { 'urea': 'Urea', 'npk': 'NPK', 'organik': 'Organik' };
             updates.push({
                id_desa: this.editingDesa.id_desa,
-               kolom: key,
+               nama_pupuk: pupukMap[parts[1]],
+               mt_field: parts[0],
                nilai_baru: this.editingDesa[key]
             });
          }
@@ -276,7 +290,7 @@ ALUR APLIKASI KONFIRMASI eRDKK (Untuk menjawab pertanyaan pengguna):
 
 PENTING: Jawablah pertanyaan dengan bahasa Indonesia yang ramah, sopan, ringkas, dan jelas.`;
 
-         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${this.apiKey}`, {
+         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
