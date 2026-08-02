@@ -222,12 +222,12 @@ Alpine.data('adminData', () => ({
     },
 
     downloadTemplate() {
-       let headerRow = ["Nama PPTS", "Desa"];
+       let headerRow = ["ID Desa", "Nama PPTS", "Desa"];
        this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT I`));
        this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT II`));
        this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT III`));
        
-       let sampleData = ["Budi Santoso", "Sukamaju"];
+       let sampleData = ["DESA01", "Budi Santoso", "Sukamaju"];
        this.mockPupuk.forEach(() => sampleData.push(100));
        this.mockPupuk.forEach(() => sampleData.push(100));
        this.mockPupuk.forEach(() => sampleData.push(100));
@@ -239,13 +239,13 @@ Alpine.data('adminData', () => ({
     },
 
     exportExcel() {
-       let headerRow = ["Nama PPTS", "Desa"];
+       let headerRow = ["ID Desa", "Nama PPTS", "Desa"];
        this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT I`));
        this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT II`));
        this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT III`));
 
        const dataRows = this.mockErdkkList.map(row => {
-          let r = [row.ppts, row.desa];
+          let r = [row.id, row.ppts, row.desa];
           this.mockPupuk.forEach(p => r.push(row.alokasi?.mt1?.[p.nama] || 0));
           this.mockPupuk.forEach(p => r.push(row.alokasi?.mt2?.[p.nama] || 0));
           this.mockPupuk.forEach(p => r.push(row.alokasi?.mt3?.[p.nama] || 0));
@@ -267,8 +267,68 @@ Alpine.data('adminData', () => ({
     },
 
     handleImport(event) {
-       alert(`Import massal saat ini tidak tersedia (Dalam integrasi).`);
-       event.target.value = ''; 
+       const file = event.target.files[0];
+       if (!file) return;
+       
+       const reader = new FileReader();
+       reader.onload = async (e) => {
+           this.isLoading = true;
+           try {
+               const data = new Uint8Array(e.target.result);
+               const workbook = XLSX.read(data, { type: 'array' });
+               const firstSheetName = workbook.SheetNames[0];
+               const worksheet = workbook.Sheets[firstSheetName];
+               const json = XLSX.utils.sheet_to_json(worksheet);
+               
+               if (!json || json.length === 0) {
+                   alert('File Excel kosong atau format tidak sesuai.');
+                   this.isLoading = false;
+                   return;
+               }
+               
+               if (!json[0].hasOwnProperty('ID Desa')) {
+                   alert('Format Excel salah! Kolom "ID Desa" tidak ditemukan. Pastikan menggunakan format dari tombol Unduh Template.');
+                   this.isLoading = false;
+                   return;
+               }
+               
+               let updates = [];
+               json.forEach(row => {
+                   const id_desa = row['ID Desa'];
+                   if (!id_desa) return;
+                   
+                   this.mockPupuk.forEach(p => {
+                       updates.push({
+                           id_desa: id_desa,
+                           nama_pupuk: p.nama,
+                           mt1: row[`${p.nama} MT I`] || 0,
+                           mt2: row[`${p.nama} MT II`] || 0,
+                           mt3: row[`${p.nama} MT III`] || 0
+                       });
+                   });
+               });
+               
+               const payload = { action: 'importErdkk', data: updates };
+               const response = await fetch(GAS_URL, {
+                   method: 'POST',
+                   body: JSON.stringify(payload)
+               });
+               
+               const result = await response.json();
+               if (result.status === 'success') {
+                   alert('Import data eRDKK berhasil!');
+                   await this.loadInitialData();
+               } else {
+                   throw new Error(result.message || 'Gagal import');
+               }
+           } catch (error) {
+               console.error(error);
+               alert('Terjadi kesalahan saat import data: ' + error.message);
+           }
+           this.isLoading = false;
+           event.target.value = ''; 
+       };
+       reader.readAsArrayBuffer(file);
     }
 }));
 
