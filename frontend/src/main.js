@@ -24,17 +24,17 @@ Alpine.data('appData', () => ({
 
    editingDesa: null,
 
-   get totalAllMT1() {
-      return this.erdkkList.reduce((acc, curr) => acc + (Number(curr.mt1_urea) || 0) + (Number(curr.mt1_npk) || 0) + (Number(curr.mt1_organik) || 0), 0);
+   get totalUrea() {
+      return this.erdkkList.reduce((acc, curr) => acc + (Number(curr.mt1_urea) || 0) + (Number(curr.mt2_urea) || 0) + (Number(curr.mt3_urea) || 0), 0);
    },
-   get totalAllMT2() {
-      return this.erdkkList.reduce((acc, curr) => acc + (Number(curr.mt2_urea) || 0) + (Number(curr.mt2_npk) || 0) + (Number(curr.mt2_organik) || 0), 0);
+   get totalNpk() {
+      return this.erdkkList.reduce((acc, curr) => acc + (Number(curr.mt1_npk) || 0) + (Number(curr.mt2_npk) || 0) + (Number(curr.mt3_npk) || 0), 0);
    },
-   get totalAllMT3() {
-      return this.erdkkList.reduce((acc, curr) => acc + (Number(curr.mt3_urea) || 0) + (Number(curr.mt3_npk) || 0) + (Number(curr.mt3_organik) || 0), 0);
+   get totalOrganik() {
+      return this.erdkkList.reduce((acc, curr) => acc + (Number(curr.mt1_organik) || 0) + (Number(curr.mt2_organik) || 0) + (Number(curr.mt3_organik) || 0), 0);
    },
    get grandTotal() {
-      return this.totalAllMT1 + this.totalAllMT2 + this.totalAllMT3;
+      return this.totalUrea + this.totalNpk + this.totalOrganik;
    },
    formatNumber(num) {
       if (!num) return '0';
