@@ -91,20 +91,20 @@
                <div class="grid grid-cols-3 gap-3 mb-4">
                   <div class="bg-white/20 rounded-lg p-2 text-center backdrop-blur-sm border border-white/10">
                      <p class="text-primary-100 text-xs font-semibold mb-1 uppercase">MT I</p>
-                     <p class="text-xl font-bold" x-text="totalAllMT1"></p>
+                     <p class="text-xl font-bold" x-text="formatNumber(totalAllMT1)"></p>
                   </div>
                   <div class="bg-white/20 rounded-lg p-2 text-center backdrop-blur-sm border border-white/10">
                      <p class="text-primary-100 text-xs font-semibold mb-1 uppercase">MT II</p>
-                     <p class="text-xl font-bold" x-text="totalAllMT2"></p>
+                     <p class="text-xl font-bold" x-text="formatNumber(totalAllMT2)"></p>
                   </div>
                   <div class="bg-white/20 rounded-lg p-2 text-center backdrop-blur-sm border border-white/10">
                      <p class="text-primary-100 text-xs font-semibold mb-1 uppercase">MT III</p>
-                     <p class="text-xl font-bold" x-text="totalAllMT3"></p>
+                     <p class="text-xl font-bold" x-text="formatNumber(totalAllMT3)"></p>
                   </div>
                </div>
                <div class="bg-white rounded-lg p-3 flex justify-between items-center text-gray-800 shadow">
                   <span class="font-bold text-sm uppercase tracking-wider">Total Keseluruhan</span>
-                  <span class="text-2xl font-black text-primary-700" x-text="grandTotal"></span>
+                  <span class="text-2xl font-black text-primary-700" x-text="formatNumber(grandTotal)"></span>
                </div>
             </div>
 
@@ -124,27 +124,27 @@
                         <div class="bg-blue-50/50 rounded-lg p-3 border border-blue-100 shadow-sm">
                            <p class="font-bold text-blue-800 mb-2.5 text-xs uppercase tracking-wider text-center border-b border-blue-200 pb-1.5">Musim Tanam I</p>
                            <div class="grid grid-cols-1 gap-2">
-                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-blue-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Urea</span><span class="font-bold text-gray-900 text-sm" x-text="desa.mt1_urea"></span></div>
-                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-blue-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">NPK</span><span class="font-bold text-gray-900 text-sm" x-text="desa.mt1_npk"></span></div>
-                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-blue-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Organik</span><span class="font-bold text-gray-900 text-sm" x-text="desa.mt1_organik"></span></div>
+                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-blue-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Urea</span><span class="font-bold text-gray-900 text-sm" x-text="formatNumber(desa.mt1_urea)"></span></div>
+                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-blue-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">NPK</span><span class="font-bold text-gray-900 text-sm" x-text="formatNumber(desa.mt1_npk)"></span></div>
+                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-blue-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Organik</span><span class="font-bold text-gray-900 text-sm" x-text="formatNumber(desa.mt1_organik)"></span></div>
                            </div>
                         </div>
                         <!-- MT II -->
                         <div class="bg-green-50/50 rounded-lg p-3 border border-green-100 shadow-sm">
                            <p class="font-bold text-green-800 mb-2.5 text-xs uppercase tracking-wider text-center border-b border-green-200 pb-1.5">Musim Tanam II</p>
                            <div class="grid grid-cols-1 gap-2">
-                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-green-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Urea</span><span class="font-bold text-gray-900 text-sm" x-text="desa.mt2_urea"></span></div>
-                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-green-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">NPK</span><span class="font-bold text-gray-900 text-sm" x-text="desa.mt2_npk"></span></div>
-                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-green-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Organik</span><span class="font-bold text-gray-900 text-sm" x-text="desa.mt2_organik"></span></div>
+                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-green-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Urea</span><span class="font-bold text-gray-900 text-sm" x-text="formatNumber(desa.mt2_urea)"></span></div>
+                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-green-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">NPK</span><span class="font-bold text-gray-900 text-sm" x-text="formatNumber(desa.mt2_npk)"></span></div>
+                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-green-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Organik</span><span class="font-bold text-gray-900 text-sm" x-text="formatNumber(desa.mt2_organik)"></span></div>
                            </div>
                         </div>
                         <!-- MT III -->
                         <div class="bg-orange-50/50 rounded-lg p-3 border border-orange-100 shadow-sm">
                            <p class="font-bold text-orange-800 mb-2.5 text-xs uppercase tracking-wider text-center border-b border-orange-200 pb-1.5">Musim Tanam III</p>
                            <div class="grid grid-cols-1 gap-2">
-                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-orange-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Urea</span><span class="font-bold text-gray-900 text-sm" x-text="desa.mt3_urea"></span></div>
-                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-orange-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">NPK</span><span class="font-bold text-gray-900 text-sm" x-text="desa.mt3_npk"></span></div>
-                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-orange-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Organik</span><span class="font-bold text-gray-900 text-sm" x-text="desa.mt3_organik"></span></div>
+                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-orange-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Urea</span><span class="font-bold text-gray-900 text-sm" x-text="formatNumber(desa.mt3_urea)"></span></div>
+                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-orange-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">NPK</span><span class="font-bold text-gray-900 text-sm" x-text="formatNumber(desa.mt3_npk)"></span></div>
+                              <div class="bg-white py-2 px-3 rounded shadow-sm border border-orange-50/50 flex flex-col items-center justify-center"><span class="text-gray-500 text-xs font-semibold uppercase mb-0.5">Organik</span><span class="font-bold text-gray-900 text-sm" x-text="formatNumber(desa.mt3_organik)"></span></div>
                            </div>
                         </div>
                      </div>

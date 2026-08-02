@@ -36,6 +36,10 @@ Alpine.data('appData', () => ({
    get grandTotal() {
       return this.totalAllMT1 + this.totalAllMT2 + this.totalAllMT3;
    },
+   formatNumber(num) {
+      if (!num) return '0';
+      return Number(num).toLocaleString('id-ID');
+   },
 
    async init() {
       if (USE_MOCK) {
