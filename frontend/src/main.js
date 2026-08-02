@@ -237,7 +237,7 @@ Alpine.data('chatBot', () => ({
    ],
    userInput: '',
    isLoading: false,
-   apiKey: 'AQ.Ab8RN6Lct-D7U9hh5jFGcViYrr6TEZsYJgXl0M9wRcVfviwuSw', // Masukkan API Key Gemini Anda di sini
+   apiKey: import.meta.env.VITE_GEMINI_API_KEY || '', // Mengambil key dari .env.local atau Cloudflare
 
    async sendMessage() {
       if (!this.userInput.trim()) return;
