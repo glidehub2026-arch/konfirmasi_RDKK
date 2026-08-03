@@ -1,337 +1,516 @@
-import './style.css'
-import Alpine from 'alpinejs'
-import * as XLSX from 'xlsx'
-
-window.Alpine = Alpine
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzswgz065wKuXgWMGUWL5UO9UvWS4k1vGxTfsbI138Phq7FQPuknncdOKVVSqS5atrF/exec';
-const USE_MOCK = false; 
-
-Alpine.data('adminData', () => ({
-    isLoggedIn: false,
-    isLoading: false,
-    username: '',
-    password: '',
-    tab: 'dashboard',
-    
-    showUserModal: false,
-    modalMode: 'add',
-    userForm: { id_user: null, nama: '', username: '', password_hash: '123456', role: 'PPTS', status: 'Aktif' },
-    mockUsers: [],
-    
-    showPupukModal: false,
-    pupukMode: 'add',
-    pupukForm: { id_pupuk: null, nama_pupuk: '', status: 'Aktif' },
-    mockPupuk: [],
-    
-    stats: { total: 0, confirmed: 0, pending: 0 },
-    mockPptsList: [],
-    mockErdkkList: [],
-    mockAuditLogs: [],
-    
-    async login() {
-       if (USE_MOCK) {
-           if (this.username === 'admin' && this.password === 'admin123') this.isLoggedIn = true;
-           return;
-       }
-       
-       this.isLoading = true;
-       try {
-           const res = await fetch(GAS_URL + '?action=getUsers&t=' + new Date().getTime(), { redirect: 'follow' });
-           const json = await res.json();
-           if (json.status === 'success') {
-               const users = json.data;
-               // Validasi Login: Cek kesesuaian username & password dan role "Super Admin"
-               const user = users.find(u => String(u.username) === String(this.username) && String(u.password_hash) === String(this.password) && u.role === 'Super Admin');
-               if (user) {
-                   this.isLoggedIn = true;
-                   this.mockUsers = users; 
-                   await this.loadInitialData();
-               } else {
-                   alert('Username atau Password salah, atau Anda tidak memiliki akses Super Admin!');
-               }
-           }
-       } catch (e) {
-           console.error(e);
-           alert('Gagal menghubungi server Google Apps Script.');
-       }
-       this.isLoading = false;
-    },
-    
-    async loadInitialData() {
-        this.isLoading = true;
-        try {
-            // Load PPTS & Hitung Statistik
-            const resPpts = await fetch(GAS_URL + '?action=getPPTS&t=' + new Date().getTime(), { redirect: 'follow' });
-            const jsonPpts = await resPpts.json();
-            if (jsonPpts.status === 'success') {
-                this.mockPptsList = jsonPpts.data.map(p => ({
-                   id: p.id_ppts,
-                   nama: p.nama_ppts,
-                   kecamatan: p.id_kecamatan,
-                   status: p.status_konfirmasi || 'Belum',
-                   tgl: p.tanggal_konfirmasi ? new Date(p.tanggal_konfirmasi).toLocaleDateString('id-ID') : ''
-                }));
-                this.stats.total = this.mockPptsList.length;
-                this.stats.confirmed = this.mockPptsList.filter(p => p.status === 'Sudah').length;
-                this.stats.pending = this.stats.total - this.stats.confirmed;
-            }
-            
-            // Load Jenis Pupuk
-            const resPupuk = await fetch(GAS_URL + '?action=getPupuk&t=' + new Date().getTime(), { redirect: 'follow' });
-            const jsonPupuk = await resPupuk.json();
-            if (jsonPupuk.status === 'success') {
-                this.mockPupuk = jsonPupuk.data.map(p => ({
-                    id: p.id_pupuk, nama: p.nama_pupuk, status: p.status
-                }));
-            }
-            
-            // Load Semua eRDKK untuk keperluan Laporan Export
-            const resErdkk = await fetch(GAS_URL + '?action=getERDKK&t=' + new Date().getTime(), { redirect: 'follow' });
-            const jsonErdkk = await resErdkk.json();
-            if (jsonErdkk.status === 'success') {
-                this.mockErdkkList = jsonErdkk.data.map(d => ({
-                    id: d.id_desa, 
-                    ppts: this.mockPptsList.find(p => p.id == d.id_ppts)?.nama || 'Unknown',
-                    desa: d.nama_desa, 
-                    alokasi: d.alokasi
-                }));
-            }
-            
-        } catch(e) {
-            console.error(e);
-        }
-        this.isLoading = false;
-    },
-    
-    logout() {
-       this.isLoggedIn = false;
-       this.username = '';
-       this.password = '';
-    },
-
-    openAddUserModal() {
-       this.modalMode = 'add';
-       this.userForm = { id_user: null, nama: '', username: '', password_hash: '123456', role: 'PPTS', status: 'Aktif' };
-       this.showUserModal = true;
-    },
-    
-    openEditUserModal(user) {
-       this.modalMode = 'edit';
-       this.userForm = { ...user };
-       this.showUserModal = true;
-    },
-    
-    async saveUser() {
-       if(!this.userForm.nama || !this.userForm.username) {
-          alert('Nama dan Username/NIK wajib diisi!');
-          return;
-       }
-       if (this.modalMode === 'add') this.userForm.id_user = Date.now();
-       
-       this.isLoading = true;
-       try {
-           const res = await fetch(GAS_URL + '?t=' + new Date().getTime(), {
-               method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'manageUser', mode: this.modalMode, data: this.userForm })
-           });
-           const json = await res.json();
-           if(json.status === 'success') {
-               if(this.modalMode === 'add') this.mockUsers.push({...this.userForm});
-               else {
-                   const idx = this.mockUsers.findIndex(u => u.id_user === this.userForm.id_user);
-                   if(idx !== -1) this.mockUsers[idx] = {...this.userForm};
-               }
-               this.showUserModal = false;
-           }
-       } catch(e) { alert('Gagal menyimpan user'); }
-       this.isLoading = false;
-    },
-    
-    async deleteUser(user) {
-       if (confirm(`Yakin ingin menghapus pengguna ${user.nama}?`)) {
-           this.isLoading = true;
-           try {
-               const res = await fetch(GAS_URL + '?t=' + new Date().getTime(), {
-                   method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'manageUser', mode: 'delete', data: { id_user: user.id_user } })
-               });
-               const json = await res.json();
-               if(json.status === 'success') {
-                   this.mockUsers = this.mockUsers.filter(u => u.id_user !== user.id_user);
-               }
-           } catch(e) {}
-           this.isLoading = false;
-       }
-    },
-
-    openAddPupukModal() {
-       this.pupukMode = 'add';
-       this.pupukForm = { id_pupuk: null, nama_pupuk: '', status: 'Aktif' };
-       this.showPupukModal = true;
-    },
-    
-    openEditPupukModal(p) {
-       this.pupukMode = 'edit';
-       this.pupukForm = { id_pupuk: p.id, nama_pupuk: p.nama, status: p.status };
-       this.showPupukModal = true;
-    },
-    
-    async savePupuk() {
-       if(!this.pupukForm.nama_pupuk) {
-          alert('Nama Jenis Pupuk wajib diisi!');
-          return;
-       }
-       if (this.pupukMode === 'add') this.pupukForm.id_pupuk = Date.now();
-       
-       this.isLoading = true;
-       try {
-           const res = await fetch(GAS_URL + '?t=' + new Date().getTime(), {
-               method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'managePupuk', mode: this.pupukMode, data: this.pupukForm })
-           });
-           const json = await res.json();
-           if(json.status === 'success') {
-               const mapToMock = { id: this.pupukForm.id_pupuk, nama: this.pupukForm.nama_pupuk, status: this.pupukForm.status };
-               if(this.pupukMode === 'add') this.mockPupuk.push(mapToMock);
-               else {
-                   const idx = this.mockPupuk.findIndex(u => u.id === this.pupukForm.id_pupuk);
-                   if(idx !== -1) this.mockPupuk[idx] = mapToMock;
-               }
-               this.showPupukModal = false;
-           }
-       } catch(e) { alert('Gagal menyimpan pupuk'); }
-       this.isLoading = false;
-    },
-    
-    async deletePupuk(p) {
-       if (confirm(`Yakin ingin menghapus jenis pupuk ${p.nama}?`)) {
-           this.isLoading = true;
-           try {
-               const res = await fetch(GAS_URL + '?t=' + new Date().getTime(), {
-                   method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'managePupuk', mode: 'delete', data: { id_pupuk: p.id } })
-               });
-               const json = await res.json();
-               if(json.status === 'success') {
-                   this.mockPupuk = this.mockPupuk.filter(item => item.id !== p.id);
-               }
-           } catch(e) {}
-           this.isLoading = false;
-       }
-    },
-    
-    batalKonfirmasi(ppts) {
-       alert('Fitur pembatalan konfirmasi dari Dasbor belum tersedia di API.');
-    },
-
-    downloadTemplate() {
-       let headerRow = ["ID Desa", "Nama PPTS", "Desa"];
-       this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT I`));
-       this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT II`));
-       this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT III`));
-       
-       let sampleData = ["DESA01", "Budi Santoso", "Sukamaju"];
-       this.mockPupuk.forEach(() => sampleData.push(100));
-       this.mockPupuk.forEach(() => sampleData.push(100));
-       this.mockPupuk.forEach(() => sampleData.push(100));
-
-       const ws = XLSX.utils.aoa_to_sheet([[...headerRow], [...sampleData]]);
-       const wb = XLSX.utils.book_new();
-       XLSX.utils.book_append_sheet(wb, ws, "Template_eRDKK");
-       XLSX.writeFile(wb, "Template_Import_eRDKK.xlsx");
-    },
-
-    exportExcel() {
-       let headerRow = ["ID Desa", "Nama PPTS", "Desa"];
-       this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT I`));
-       this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT II`));
-       this.mockPupuk.forEach(p => headerRow.push(`${p.nama} MT III`));
-
-       const dataRows = this.mockErdkkList.map(row => {
-          let r = [row.id, row.ppts, row.desa];
-          this.mockPupuk.forEach(p => r.push(row.alokasi?.mt1?.[p.nama] || 0));
-          this.mockPupuk.forEach(p => r.push(row.alokasi?.mt2?.[p.nama] || 0));
-          this.mockPupuk.forEach(p => r.push(row.alokasi?.mt3?.[p.nama] || 0));
-          return r;
-       });
-       
-       const ws = XLSX.utils.aoa_to_sheet([[...headerRow], ...dataRows]);
-       const wb = XLSX.utils.book_new();
-       XLSX.utils.book_append_sheet(wb, ws, "Data_eRDKK");
-       XLSX.writeFile(wb, "Laporan_Data_eRDKK.xlsx");
-    },
-
-    exportPdf() {
-       window.print();
-    },
-
-    triggerImport() {
-       document.getElementById('importFileInput').click();
-    },
-
-    handleImport(event) {
-       const file = event.target.files[0];
-       if (!file) return;
-       
-       const reader = new FileReader();
-       reader.onload = async (e) => {
-           this.isLoading = true;
-           try {
-               const data = new Uint8Array(e.target.result);
-               const workbook = XLSX.read(data, { type: 'array' });
-               const firstSheetName = workbook.SheetNames[0];
-               const worksheet = workbook.Sheets[firstSheetName];
-               const json = XLSX.utils.sheet_to_json(worksheet);
-               
-               if (!json || json.length === 0) {
-                   alert('File Excel kosong atau format tidak sesuai.');
-                   this.isLoading = false;
-                   return;
-               }
-               
-               if (!json[0].hasOwnProperty('ID Desa')) {
-                   alert('Format Excel salah! Kolom "ID Desa" tidak ditemukan. Pastikan menggunakan format dari tombol Unduh Template.');
-                   this.isLoading = false;
-                   return;
-               }
-               
-               let updates = [];
-               json.forEach(row => {
-                   const id_desa = row['ID Desa'];
-                   if (!id_desa) return;
-                   
-                   this.mockPupuk.forEach(p => {
-                       updates.push({
-                           id_desa: id_desa,
-                           nama_pupuk: p.nama,
-                           mt1: row[`${p.nama} MT I`] || 0,
-                           mt2: row[`${p.nama} MT II`] || 0,
-                           mt3: row[`${p.nama} MT III`] || 0
-                       });
-                   });
-               });
-               
-               const payload = { action: 'importErdkk', data: updates };
-               const response = await fetch(GAS_URL + '?t=' + new Date().getTime(), {
-                   method: 'POST',
-                   redirect: 'follow',
-                   headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                   body: JSON.stringify(payload)
-               });
-               
-               const result = await response.json();
-               if (result.status === 'success') {
-                   alert('Import data eRDKK berhasil!');
-                   await this.loadInitialData();
-               } else {
-                   throw new Error(result.message || 'Gagal import');
-               }
-           } catch (error) {
-               console.error(error);
-               alert('Terjadi kesalahan saat import data: ' + error.message);
-           }
-           this.isLoading = false;
-           event.target.value = ''; 
-       };
-       reader.readAsArrayBuffer(file);
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Konfirmasi RDKK</title>
+  <link rel="icon" type="image/png" href="/logo_koperasi.png" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    [x-cloak] { display: none !important; }
+    @media print {
+      body * { visibility: hidden; }
+      .print-area, .print-area * { visibility: visible; }
+      .print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 10px; }
+      aside, .print-hide { display: none !important; }
     }
-}));
+  </style>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body class="bg-gray-50 font-sans" x-data="adminData">
+  
+  <!-- Loading Overlay -->
+  <div x-show="isLoading" style="display: none;" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+      <div class="bg-white p-5 rounded-lg shadow-xl flex flex-col items-center">
+          <svg class="animate-spin h-8 w-8 text-primary-600 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span class="text-sm font-medium text-gray-700">Memproses Data...</span>
+      </div>
+  </div>
 
-Alpine.start();
+  <div x-cloak>
+    
+    <!-- Login Admin -->
+    <div x-show="!isLoggedIn" class="min-h-screen flex items-center justify-center bg-white">
+       <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-gray-100">
+          <div class="text-center mb-8">
+             <div class="bg-primary-100 text-primary-600 p-3 rounded-full inline-block mb-3">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+             </div>
+             <h2 class="text-2xl font-bold text-gray-800">Admin Login</h2>
+             <p class="text-gray-500 text-sm mt-1">Sistem Konfirmasi eRDKK</p>
+          </div>
+          <div class="space-y-5">
+             <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input type="text" x-model="username" class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition" placeholder="admin">
+             </div>
+             <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input type="password" x-model="password" class="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition" placeholder="••••••••">
+             </div>
+             <button @click="login" class="w-full bg-primary-600 hover:bg-primary-700 text-white p-3 rounded-lg font-bold shadow-md transition-all active:scale-95 mt-4">
+                Masuk
+             </button>
+          </div>
+       </div>
+    </div>
+
+    <!-- Dashboard Admin (Desktop Optimized) -->
+    <div x-show="isLoggedIn" class="flex h-screen overflow-hidden bg-white">
+       <!-- Sidebar -->
+       <aside class="w-64 bg-gray-900 text-gray-300 hidden md:flex flex-col shadow-2xl z-20">
+          <div class="p-6 text-xl font-bold text-white border-b border-gray-800 flex items-center">
+             <img src="/logo_koperasi.png" alt="Logo Koperasi" class="h-8 w-8 mr-3 object-contain">
+             AdminPanel
+          </div>
+          <nav class="flex-1 p-4 space-y-2 mt-4">
+             <a href="#" @click.prevent="tab='dashboard'" class="flex items-center p-3 rounded-lg hover:bg-gray-800 transition-colors" :class="tab=='dashboard'?'bg-gray-800 text-white font-medium':''">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                Dashboard
+             </a>
+             <a href="#" @click.prevent="tab='data'" class="flex items-center p-3 rounded-lg hover:bg-gray-800 transition-colors" :class="tab=='data'?'bg-gray-800 text-white font-medium':''">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                Data PPTS
+             </a>
+             <a href="#" @click.prevent="tab='erdkk'" class="flex items-center p-3 rounded-lg hover:bg-gray-800 transition-colors" :class="tab=='erdkk'?'bg-gray-800 text-white font-medium':''">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                Data eRDKK
+             </a>
+             <a href="#" @click.prevent="tab='audit'" class="flex items-center p-3 rounded-lg hover:bg-gray-800 transition-colors" :class="tab=='audit'?'bg-gray-800 text-white font-medium':''">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Riwayat Audit
+             </a>
+             <a href="#" @click.prevent="tab='user'" class="flex items-center p-3 rounded-lg hover:bg-gray-800 transition-colors" :class="tab=='user'?'bg-gray-800 text-white font-medium':''">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                Manajemen Pengguna
+             </a>
+             <a href="#" @click.prevent="tab='pupuk'" class="flex items-center p-3 rounded-lg hover:bg-gray-800 transition-colors" :class="tab=='pupuk'?'bg-gray-800 text-white font-medium':''">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
+                Jenis Pupuk
+             </a>
+             <a href="#" @click.prevent="logout" class="flex items-center p-3 rounded-lg hover:bg-red-900/50 text-red-400 mt-10 transition-colors">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                Logout
+             </a>
+          </nav>
+       </aside>
+
+       <!-- Main Content -->
+       <main class="flex-1 overflow-y-auto p-4 md:p-8 w-full">
+          
+          <!-- Tab: Dashboard -->
+          <div x-show="tab=='dashboard'" x-transition.opacity>
+             <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Ringkasan Statistik</h1>
+             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center">
+                   <div class="bg-blue-100 p-4 rounded-lg mr-4">
+                      <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                   </div>
+                   <div>
+                      <h3 class="text-gray-500 font-medium text-sm">Total PPTS</h3>
+                      <p class="text-2xl font-bold text-gray-800" x-text="stats.total"></p>
+                   </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center">
+                   <div class="bg-green-100 p-4 rounded-lg mr-4">
+                      <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                   </div>
+                   <div>
+                      <h3 class="text-gray-500 font-medium text-sm">Sudah Konfirmasi</h3>
+                      <p class="text-2xl font-bold text-green-600" x-text="stats.confirmed"></p>
+                   </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center">
+                   <div class="bg-yellow-100 p-4 rounded-lg mr-4">
+                      <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                   </div>
+                   <div>
+                      <h3 class="text-gray-500 font-medium text-sm">Belum Konfirmasi</h3>
+                      <p class="text-2xl font-bold text-yellow-600" x-text="stats.pending"></p>
+                   </div>
+                </div>
+             </div>
+             
+             <!-- Progress Bar (Mock) -->
+             <div class="mt-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 class="font-bold text-gray-800 mb-2">Progres Konfirmasi Keseluruhan</h3>
+                <div class="w-full bg-gray-200 rounded-full h-4 mb-2 overflow-hidden">
+                   <div class="bg-primary-500 h-4 rounded-full transition-all duration-1000" :style="`width: ${(stats.confirmed/stats.total)*100}%`"></div>
+                </div>
+                <p class="text-sm text-gray-500" x-text="`${Math.round((stats.confirmed/stats.total)*100)}% Selesai`"></p>
+             </div>
+          </div>
+          
+          <!-- Tab: Data PPTS -->
+          <div x-show="tab=='data'" x-transition.opacity class="print-area w-full">
+             <!-- Header Khusus Print (PDF) -->
+             <div class="hidden print:block mb-6 text-center border-b-2 border-gray-800 pb-4">
+                <h1 class="text-2xl font-bold uppercase tracking-wider">STATUS LAPORAN KONFIRMASI RDKK PPTS</h1>
+                <p class="text-sm text-gray-600 mt-1">Dicetak pada: <span x-text="new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })"></span></p>
+             </div>
+
+             <div class="flex flex-col md:flex-row justify-between md:items-center mb-6 print-hide gap-4">
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">Status Konfirmasi PPTS</h1>
+                <div class="flex flex-col sm:flex-row gap-3">
+                   <div class="relative">
+                      <input type="text" placeholder="Cari PPTS..." class="border border-gray-300 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-primary-500 w-full sm:w-64 h-full">
+                      <svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                   </div>
+                   <button @click="exportPdf" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition shadow-sm flex items-center justify-center h-full">
+                      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                      Export PDF
+                   </button>
+                </div>
+             </div>
+             
+             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+                <table class="min-w-full text-left text-sm whitespace-nowrap">
+                   <thead class="bg-gray-50 text-gray-600 font-medium border-b border-gray-200">
+                      <tr>
+                         <th class="p-4">Nama PPTS</th>
+                         <th class="p-4">Kecamatan</th>
+                         <th class="p-4">Status</th>
+                         <th class="p-4">Tgl Konfirmasi</th>
+                         <th class="p-4 print-hide">Aksi</th>
+                      </tr>
+                   </thead>
+                   <tbody class="divide-y divide-gray-100">
+                      <template x-for="p in mockPptsList" :key="p.id">
+                         <tr class="hover:bg-gray-50/50 transition-colors">
+                            <td class="p-4 font-medium text-gray-800" x-text="p.nama"></td>
+                            <td class="p-4 text-gray-600" x-text="p.kecamatan"></td>
+                            <td class="p-4">
+                               <span class="px-2.5 py-1 rounded-full text-xs font-semibold" 
+                                     :class="p.status === 'Sudah' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'"
+                                     x-text="p.status"></span>
+                            </td>
+                            <td class="p-4 text-gray-500" x-text="p.tgl || '-'"></td>
+                            <td class="p-4 print-hide">
+                               <button x-show="p.status === 'Sudah'" @click="batalKonfirmasi(p)" class="inline-flex items-center text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 hover:border-red-300 px-3 py-1.5 rounded-lg shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-red-200">
+                                  <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                  Buka Akses
+                               </button>
+                            </td>
+                         </tr>
+                      </template>
+                   </tbody>
+                </table>
+             </div>
+             
+             <!-- Ringkasan Statistik Khusus Print -->
+             <div class="hidden print:block mt-8">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b border-gray-300 pb-2">Ringkasan Statistik Konfirmasi</h3>
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                   <div class="border border-gray-300 p-4 rounded text-center">
+                      <p class="text-gray-500 text-sm">Total PPTS</p>
+                      <p class="text-2xl font-bold" x-text="stats.total"></p>
+                   </div>
+                   <div class="border border-gray-300 p-4 rounded text-center">
+                      <p class="text-gray-500 text-sm">Sudah Konfirmasi</p>
+                      <p class="text-2xl font-bold text-green-700" x-text="stats.confirmed"></p>
+                   </div>
+                   <div class="border border-gray-300 p-4 rounded text-center">
+                      <p class="text-gray-500 text-sm">Belum Konfirmasi</p>
+                      <p class="text-2xl font-bold text-yellow-700" x-text="stats.pending"></p>
+                   </div>
+                </div>
+                <div class="border border-gray-300 p-4 rounded">
+                   <p class="font-bold mb-2">Progres Keseluruhan</p>
+                   <div class="w-full bg-gray-200 h-4 rounded-full overflow-hidden border border-gray-300">
+                      <div class="bg-gray-800 h-4 rounded-full" :style="`width: ${(stats.confirmed/stats.total)*100}%`"></div>
+                   </div>
+                   <p class="text-sm mt-2 text-right font-medium" x-text="`${Math.round((stats.confirmed/stats.total)*100)}% Selesai`"></p>
+                </div>
+             </div>
+          </div>
+
+          <!-- Tab: Data eRDKK -->
+          <div x-show="tab=='erdkk'" x-transition.opacity class="print-area w-full">
+             <!-- Header Khusus Print (PDF) - Kop Surat Resmi -->
+             <div class="hidden print:block mb-6">
+                <div class="text-center border-b-4 border-double border-gray-900 pb-4 mb-6">
+                   <h2 class="text-xl font-bold uppercase tracking-wide">Pemerintah Provinsi Jawa Tengah</h2>
+                   <h1 class="text-2xl font-extrabold uppercase mt-1">Dinas Pertanian dan Perkebunan</h1>
+                   <p class="text-sm mt-2 font-medium">Komp. Tarubudaya, Jl. Gatot Subroto, Ungaran Barat, Kab. Semarang</p>
+                   <p class="text-sm">Email: dinaspertanian@jatengprov.go.id | Website: distanbun.jatengprov.go.id</p>
+                </div>
+                <div class="text-center mb-6">
+                   <h3 class="text-xl font-bold uppercase underline decoration-2 underline-offset-4">Laporan Master Data eRDKK</h3>
+                   <p class="text-sm mt-2">Tanggal Cetak: <span x-text="new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })"></span></p>
+                </div>
+             </div>
+             
+             <div class="flex flex-col md:flex-row justify-between md:items-end mb-6 print-hide gap-4">
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">Master Data eRDKK</h1>
+                <div class="flex flex-wrap gap-2">
+                   <button @click="downloadTemplate" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition shadow-sm flex items-center">
+                      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                      Unduh Template
+                   </button>
+                   <button @click="triggerImport" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition shadow-sm flex items-center">
+                      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                      Import Data
+                   </button>
+                   <button @click="exportExcel" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition shadow-sm flex items-center">
+                      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                      Export Excel
+                   </button>
+                   <button @click="exportPdf" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition shadow-sm flex items-center">
+                      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                      Export PDF
+                   </button>
+                   <input type="file" id="importFileInput" class="hidden" accept=".csv, .xlsx, .xls" @change="handleImport">
+                </div>
+             </div>
+             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="overflow-x-auto">
+                   <table class="min-w-full text-left text-sm whitespace-nowrap">
+                      <thead class="bg-primary-50 text-primary-700 font-semibold border-b border-primary-100 text-xs">
+                         <tr>
+                            <th class="p-4 align-middle" rowspan="2">Nama PPTS</th>
+                            <th class="p-4 align-middle" rowspan="2">Desa</th>
+                            <th class="p-4 text-center border-l border-primary-200" :colspan="mockPupuk.length">MT I (Kg)</th>
+                            <th class="p-4 text-center border-l border-primary-200" :colspan="mockPupuk.length">MT II (Kg)</th>
+                            <th class="p-4 text-center border-l border-primary-200" :colspan="mockPupuk.length">MT III (Kg)</th>
+                         </tr>
+                         <tr class="bg-primary-100/50">
+                            <!-- MT 1 -->
+                            <template x-for="(p, index) in mockPupuk" :key="'h1-'+p.id">
+                               <th class="p-2 text-center" :class="index === 0 ? 'border-l border-primary-200' : ''" x-text="p.nama"></th>
+                            </template>
+                            <!-- MT 2 -->
+                            <template x-for="(p, index) in mockPupuk" :key="'h2-'+p.id">
+                               <th class="p-2 text-center" :class="index === 0 ? 'border-l border-primary-200' : ''" x-text="p.nama"></th>
+                            </template>
+                            <!-- MT 3 -->
+                            <template x-for="(p, index) in mockPupuk" :key="'h3-'+p.id">
+                               <th class="p-2 text-center" :class="index === 0 ? 'border-l border-primary-200' : ''" x-text="p.nama"></th>
+                            </template>
+                         </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-100 text-sm">
+                         <template x-for="d in mockErdkkList" :key="d.id">
+                            <tr class="hover:bg-gray-50/50 transition-colors">
+                               <td class="p-4 font-bold text-gray-800" x-text="d.ppts"></td>
+                               <td class="p-4 text-gray-600" x-text="d.desa"></td>
+                               <!-- MT 1 -->
+                               <template x-for="(p, index) in mockPupuk" :key="'d1-'+p.id">
+                                  <td class="p-4 text-center font-semibold text-gray-700" :class="index === 0 ? 'border-l border-gray-100' : ''" x-text="d.alokasi?.mt1?.[p.nama] || 0"></td>
+                               </template>
+                               <!-- MT 2 -->
+                               <template x-for="(p, index) in mockPupuk" :key="'d2-'+p.id">
+                                  <td class="p-4 text-center font-semibold text-gray-700" :class="index === 0 ? 'border-l border-gray-100' : ''" x-text="d.alokasi?.mt2?.[p.nama] || 0"></td>
+                               </template>
+                               <!-- MT 3 -->
+                               <template x-for="(p, index) in mockPupuk" :key="'d3-'+p.id">
+                                  <td class="p-4 text-center font-semibold text-gray-700" :class="index === 0 ? 'border-l border-gray-100' : ''" x-text="d.alokasi?.mt3?.[p.nama] || 0"></td>
+                               </template>
+                            </tr>
+                         </template>
+                      </tbody>
+                   </table>
+                </div>
+             </div>
+             
+             <!-- Bagian Tanda Tangan Khusus Print -->
+             <div class="hidden print:flex justify-end mt-12 mr-12 text-center text-sm">
+                <div>
+                   <p class="mb-16">Semarang, <span x-text="new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })"></span><br>Kepala Dinas Pertanian dan Perkebunan</p>
+                   <p class="font-bold underline">Dr. Ir. Contoh Nama Pejabat, M.Si.</p>
+                   <p>NIP. 19700101 200012 1 001</p>
+                </div>
+             </div>
+          </div>
+          
+          <!-- Tab: Riwayat Audit -->
+          <div x-show="tab=='audit'" x-transition.opacity>
+             <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Riwayat Audit & Log Aktivitas</h1>
+             <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div class="relative border-l-2 border-gray-200 ml-3 space-y-8 py-2">
+                   <template x-for="log in mockAuditLogs" :key="log.id">
+                      <div class="pl-6 relative">
+                         <div class="absolute w-4 h-4 bg-primary-500 rounded-full -left-[9px] top-1 border-2 border-white shadow"></div>
+                         <p class="text-xs text-gray-500 mb-1" x-text="log.wkt"></p>
+                         <h4 class="font-bold text-gray-800" x-text="`${log.ppts} - ${log.aksi}`"></h4>
+                         <p class="text-sm text-gray-600 mt-1 bg-gray-50 p-3 rounded border border-gray-100 inline-block" x-text="log.detail"></p>
+                      </div>
+                   </template>
+                </div>
+             </div>
+          </div>
+
+          <!-- Tab: Manajemen Pengguna -->
+          <div x-show="tab=='user'" x-transition.opacity>
+             <div class="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">Manajemen Pengguna</h1>
+                <button @click.prevent="openAddUserModal" type="button" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition shadow-sm flex items-center">
+                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                   Tambah Pengguna
+                </button>
+             </div>
+             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+                <table class="min-w-full text-left text-sm whitespace-nowrap">
+                   <thead class="bg-gray-50 text-gray-600 font-medium border-b border-gray-200">
+                      <tr>
+                         <th class="p-4">Nama Lengkap</th>
+                         <th class="p-4">Username / NIK</th>
+                         <th class="p-4">Peran (Role)</th>
+                         <th class="p-4">Status</th>
+                         <th class="p-4">Aksi</th>
+                      </tr>
+                   </thead>
+                   <tbody class="divide-y divide-gray-100">
+                      <template x-for="u in mockUsers" :key="u.id">
+                         <tr class="hover:bg-gray-50/50 transition-colors">
+                            <td class="p-4 font-bold text-gray-800" x-text="u.nama"></td>
+                            <td class="p-4 text-gray-600 font-mono text-xs" x-text="u.username"></td>
+                            <td class="p-4">
+                               <span class="px-2.5 py-1 rounded text-xs font-semibold" 
+                                     :class="u.role === 'Super Admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'"
+                                     x-text="u.role"></span>
+                            </td>
+                            <td class="p-4">
+                               <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700" x-text="u.status"></span>
+                            </td>
+                            <td class="p-4">
+                               <button @click.prevent="openEditUserModal(u)" type="button" class="text-primary-600 hover:text-primary-800 mr-3 font-medium transition-colors">Edit</button>
+                               <button @click.prevent="deleteUser(u)" type="button" class="text-red-500 hover:text-red-700 font-medium transition-colors" x-show="u.role !== 'Super Admin'">Hapus</button>
+                            </td>
+                         </tr>
+                      </template>
+                   </tbody>
+                </table>
+             </div>
+          </div>
+
+          <!-- Tab: Manajemen Jenis Pupuk -->
+          <div x-show="tab=='pupuk'" x-transition.opacity>
+             <div class="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">Manajemen Jenis Pupuk</h1>
+                <button @click.prevent="openAddPupukModal" type="button" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition shadow-sm flex items-center">
+                   <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                   Tambah Jenis Pupuk
+                </button>
+             </div>
+             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+                <table class="min-w-full text-left text-sm whitespace-nowrap">
+                   <thead class="bg-gray-50 text-gray-600 font-medium border-b border-gray-200">
+                      <tr>
+                         <th class="p-4">Nama Jenis Pupuk</th>
+                         <th class="p-4">Status</th>
+                         <th class="p-4 w-32">Aksi</th>
+                      </tr>
+                   </thead>
+                   <tbody class="divide-y divide-gray-100">
+                      <template x-for="p in mockPupuk" :key="p.id">
+                         <tr class="hover:bg-gray-50/50 transition-colors">
+                            <td class="p-4 font-bold text-gray-800" x-text="p.nama"></td>
+                            <td class="p-4">
+                               <span class="px-2.5 py-1 rounded-full text-xs font-semibold" 
+                                     :class="p.status === 'Aktif' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'"
+                                     x-text="p.status"></span>
+                            </td>
+                            <td class="p-4">
+                               <button @click.prevent="openEditPupukModal(p)" type="button" class="text-primary-600 hover:text-primary-800 mr-3 font-medium transition-colors">Edit</button>
+                               <button @click.prevent="deletePupuk(p)" type="button" class="text-red-500 hover:text-red-700 font-medium transition-colors">Hapus</button>
+                            </td>
+                         </tr>
+                      </template>
+                   </tbody>
+                </table>
+             </div>
+          </div>
+
+       </main>
+    </div>
+
+    <!-- Modal Form User -->
+    <div x-show="showUserModal" style="display: none;" class="fixed inset-0 z-[100] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+       <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+          <div x-show="showUserModal" x-transition.opacity class="fixed inset-0 bg-gray-900/50 transition-opacity" @click="showUserModal = false"></div>
+          <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+          <div x-show="showUserModal" x-transition class="relative inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full z-10">
+             <div class="bg-white px-6 pt-6 pb-6">
+                <h3 class="text-xl font-bold text-gray-900 mb-4" id="modal-title" x-text="modalMode === 'add' ? 'Tambah Pengguna Baru' : 'Edit Pengguna'"></h3>
+                <div class="space-y-4">
+                   <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label>
+                      <input type="text" x-model="userForm.nama" class="block w-full border border-gray-300 rounded-lg p-2.5 focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                   </div>
+                   <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Username / NIK</label>
+                      <input type="text" x-model="userForm.username" class="block w-full border border-gray-300 rounded-lg p-2.5 focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                   </div>
+                   <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Peran (Role)</label>
+                      <select x-model="userForm.role" class="block w-full border border-gray-300 rounded-lg p-2.5 focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                         <option value="PPTS">PPTS</option>
+                         <option value="Super Admin">Super Admin</option>
+                      </select>
+                   </div>
+                   <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                      <select x-model="userForm.status" class="block w-full border border-gray-300 rounded-lg p-2.5 focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                         <option value="Aktif">Aktif</option>
+                         <option value="Non-Aktif">Non-Aktif</option>
+                      </select>
+                   </div>
+                </div>
+             </div>
+             <div class="bg-gray-50 px-6 py-4 flex flex-row-reverse">
+                <button @click="saveUser" type="button" class="ml-3 inline-flex justify-center rounded-lg border border-transparent px-5 py-2.5 bg-primary-600 text-sm font-medium text-white hover:bg-primary-700 transition">
+                   Simpan
+                </button>
+                <button @click="showUserModal = false" type="button" class="inline-flex justify-center rounded-lg border border-gray-300 px-5 py-2.5 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                   Batal
+                </button>
+             </div>
+          </div>
+       </div>
+    </div>
+
+    <!-- Modal Form Jenis Pupuk -->
+    <div x-show="showPupukModal" style="display: none;" class="fixed inset-0 z-[100] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+       <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+          <div x-show="showPupukModal" x-transition.opacity class="fixed inset-0 bg-gray-900/50 transition-opacity" @click="showPupukModal = false"></div>
+          <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+          <div x-show="showPupukModal" x-transition class="relative inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md w-full z-10">
+             <div class="bg-white px-6 pt-6 pb-6">
+                <h3 class="text-xl font-bold text-gray-900 mb-4" id="modal-title" x-text="pupukMode === 'add' ? 'Tambah Jenis Pupuk' : 'Edit Jenis Pupuk'"></h3>
+                <div class="space-y-4">
+                   <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Nama Jenis Pupuk</label>
+                      <input type="text" x-model="pupukForm.nama" class="block w-full border border-gray-300 rounded-lg p-2.5 focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                   </div>
+                   <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                      <select x-model="pupukForm.status" class="block w-full border border-gray-300 rounded-lg p-2.5 focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                         <option value="Aktif">Aktif</option>
+                         <option value="Non-Aktif">Non-Aktif</option>
+                      </select>
+                   </div>
+                </div>
+             </div>
+             <div class="bg-gray-50 px-6 py-4 flex flex-row-reverse">
+                <button @click="savePupuk" type="button" class="ml-3 inline-flex justify-center rounded-lg border border-transparent px-5 py-2.5 bg-primary-600 text-sm font-medium text-white hover:bg-primary-700 transition">
+                   Simpan
+                </button>
+                <button @click="showPupukModal = false" type="button" class="inline-flex justify-center rounded-lg border border-gray-300 px-5 py-2.5 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                   Batal
+                </button>
+             </div>
+          </div>
+       </div>
+    </div>
+
+  </div>
+  <script type="module" src="/src/admin.js"></script>
+</body>
+</html>
