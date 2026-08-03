@@ -50,7 +50,7 @@ Alpine.data('appData', () => ({
       } else {
          this.view = 'loading';
          try {
-            const res = await fetch(GAS_URL + '?action=getKecamatan');
+            const res = await fetch(GAS_URL + '?action=getKecamatan&t=' + new Date().getTime(), { redirect: 'follow' });
             const json = await res.json();
             if (json.status === 'success') this.kecamatanList = json.data;
          } catch (e) {
@@ -75,7 +75,7 @@ Alpine.data('appData', () => ({
       } else {
          this.view = 'loading';
          try {
-            const res = await fetch(GAS_URL + '?action=getPPTS&id_kecamatan=' + this.selectedKecamatan);
+            const res = await fetch(GAS_URL + '?action=getPPTS&id_kecamatan=' + this.selectedKecamatan + '&t=' + new Date().getTime(), { redirect: 'follow' });
             const json = await res.json();
             if (json.status === 'success') this.pptsList = json.data;
          } catch (e) {
@@ -104,7 +104,7 @@ Alpine.data('appData', () => ({
          }, 500);
       } else {
          try {
-            const res = await fetch(GAS_URL + '?action=getERDKK&id_ppts=' + this.selectedPpts);
+            const res = await fetch(GAS_URL + '?action=getERDKK&id_ppts=' + this.selectedPpts + '&t=' + new Date().getTime(), { redirect: 'follow' });
             const json = await res.json();
             if (json.status === 'success') {
                this.erdkkList = json.data.map(d => ({
@@ -172,8 +172,10 @@ Alpine.data('appData', () => ({
 
       this.view = 'loading';
       try {
-         const res = await fetch(GAS_URL, {
+         const res = await fetch(GAS_URL + '?t=' + new Date().getTime(), {
             method: 'POST',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({
                action: 'updateData',
                id_ppts: this.selectedPpts,
@@ -212,13 +214,15 @@ Alpine.data('appData', () => ({
          }, 800);
       } else {
          try {
-            const res = await fetch(GAS_URL, {
-               method: 'POST',
-               body: JSON.stringify({
-                  action: 'confirmData',
-                  id_ppts: this.selectedPpts
-               })
-            });
+             const res = await fetch(GAS_URL + '?t=' + new Date().getTime(), {
+                method: 'POST',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({
+                   action: 'confirmData',
+                   id_ppts: this.selectedPpts
+                })
+             });
             const json = await res.json();
             if (json.status === 'success') {
                this.isConfirmed = true;
