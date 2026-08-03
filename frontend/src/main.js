@@ -6,19 +6,6 @@ window.Alpine = Alpine
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzswgz065wKuXgWMGUWL5UO9UvWS4k1vGxTfsbI138Phq7FQPuknncdOKVVSqS5atrF/exec';
 const USE_MOCK = false; // Ubah ke false untuk menggunakan GAS_URL yang sebenarnya
 const WA_ADMIN = '6287762524133'; // Nomor WA Admin default
-const FETCH_TIMEOUT_MS = 30000; // Timeout 30 detik untuk fetch ke Google Apps Script
-
-// Helper: fetch dengan timeout otomatis menggunakan AbortController
-async function fetchWithTimeout(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
-   const controller = new AbortController();
-   const timer = setTimeout(() => controller.abort(), timeoutMs);
-   try {
-      const res = await fetch(url, { ...options, signal: controller.signal });
-      return res;
-   } finally {
-      clearTimeout(timer);
-   }
-}
 
 Alpine.data('appData', () => ({
    view: 'select', // State: 'select', 'data', 'edit', 'loading'
@@ -62,20 +49,15 @@ Alpine.data('appData', () => ({
          ];
       } else {
          this.view = 'loading';
-          try {
-             const res = await fetchWithTimeout(GAS_URL + '?action=getKecamatan&t=' + new Date().getTime(), { redirect: 'follow' });
-             const json = await res.json();
-             if (json.status === 'success') this.kecamatanList = json.data;
-          } catch (e) {
-             console.error(e);
-             if (e.name === 'AbortError') {
-                alert('Koneksi ke server timeout. Server Google sedang lambat, silahkan coba lagi.');
-             } else {
-                alert('Gagal memuat data Kecamatan: ' + e.message);
-             }
-          } finally {
-             this.view = 'select';
-          }
+         try {
+            const res = await fetch(GAS_URL + '?action=getKecamatan');
+            const json = await res.json();
+            if (json.status === 'success') this.kecamatanList = json.data;
+         } catch (e) {
+            console.error(e);
+            alert('Gagal memuat data Kecamatan');
+         }
+         this.view = 'select';
       }
    },
 
@@ -92,20 +74,15 @@ Alpine.data('appData', () => ({
          ].filter(p => p.id_kecamatan === this.selectedKecamatan);
       } else {
          this.view = 'loading';
-          try {
-             const res = await fetchWithTimeout(GAS_URL + '?action=getPPTS&id_kecamatan=' + this.selectedKecamatan + '&t=' + new Date().getTime(), { redirect: 'follow' });
-             const json = await res.json();
-             if (json.status === 'success') this.pptsList = json.data;
-          } catch (e) {
-             console.error(e);
-             if (e.name === 'AbortError') {
-                alert('Koneksi ke server timeout. Server Google sedang lambat, silahkan coba lagi.');
-             } else {
-                alert('Gagal memuat data PPTS: ' + e.message);
-             }
-          } finally {
-             this.view = 'select';
-          }
+         try {
+            const res = await fetch(GAS_URL + '?action=getPPTS&id_kecamatan=' + this.selectedKecamatan);
+            const json = await res.json();
+            if (json.status === 'success') this.pptsList = json.data;
+         } catch (e) {
+            console.error(e);
+            alert('Gagal memuat data PPTS');
+         }
+         this.view = 'select';
       }
    },
 
@@ -127,34 +104,30 @@ Alpine.data('appData', () => ({
          }, 500);
       } else {
          try {
-             const res = await fetchWithTimeout(GAS_URL + '?action=getERDKK&id_ppts=' + this.selectedPpts + '&t=' + new Date().getTime(), { redirect: 'follow' });
-             const json = await res.json();
-             if (json.status === 'success') {
-                this.erdkkList = json.data.map(d => ({
-                   ...d,
-                   mt1_urea: d.alokasi?.mt1?.['Urea'] || 0,
-                   mt1_npk: d.alokasi?.mt1?.['NPK'] || 0,
-                   mt1_organik: d.alokasi?.mt1?.['Organik'] || 0,
-                   mt2_urea: d.alokasi?.mt2?.['Urea'] || 0,
-                   mt2_npk: d.alokasi?.mt2?.['NPK'] || 0,
-                   mt2_organik: d.alokasi?.mt2?.['Organik'] || 0,
-                   mt3_urea: d.alokasi?.mt3?.['Urea'] || 0,
-                   mt3_npk: d.alokasi?.mt3?.['NPK'] || 0,
-                   mt3_organik: d.alokasi?.mt3?.['Organik'] || 0
-                }));
-                this.view = 'data';
-             } else {
-                throw new Error(json.message);
-             }
-          } catch (e) {
-             console.error(e);
-             if (e.name === 'AbortError') {
-                alert('Koneksi ke server timeout (>30 detik). Server Google sedang lambat, silahkan coba lagi.');
-             } else {
-                alert('Gagal memuat data eRDKK: ' + e.message);
-             }
-             this.view = 'select';
-          }
+            const res = await fetch(GAS_URL + '?action=getERDKK&id_ppts=' + this.selectedPpts);
+            const json = await res.json();
+            if (json.status === 'success') {
+               this.erdkkList = json.data.map(d => ({
+                  ...d,
+                  mt1_urea: d.alokasi?.mt1?.['Urea'] || 0,
+                  mt1_npk: d.alokasi?.mt1?.['NPK'] || 0,
+                  mt1_organik: d.alokasi?.mt1?.['Organik'] || 0,
+                  mt2_urea: d.alokasi?.mt2?.['Urea'] || 0,
+                  mt2_npk: d.alokasi?.mt2?.['NPK'] || 0,
+                  mt2_organik: d.alokasi?.mt2?.['Organik'] || 0,
+                  mt3_urea: d.alokasi?.mt3?.['Urea'] || 0,
+                  mt3_npk: d.alokasi?.mt3?.['NPK'] || 0,
+                  mt3_organik: d.alokasi?.mt3?.['Organik'] || 0
+               }));
+               this.view = 'data';
+            } else {
+               throw new Error(json.message);
+            }
+         } catch (e) {
+            console.error(e);
+            alert('Gagal memuat data eRDKK');
+            this.view = 'select';
+         }
       }
    },
 
@@ -199,10 +172,8 @@ Alpine.data('appData', () => ({
 
       this.view = 'loading';
       try {
-         const res = await fetch(GAS_URL + '?t=' + new Date().getTime(), {
+         const res = await fetch(GAS_URL, {
             method: 'POST',
-            redirect: 'follow',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({
                action: 'updateData',
                id_ppts: this.selectedPpts,
@@ -241,15 +212,13 @@ Alpine.data('appData', () => ({
          }, 800);
       } else {
          try {
-             const res = await fetch(GAS_URL + '?t=' + new Date().getTime(), {
-                method: 'POST',
-                redirect: 'follow',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({
-                   action: 'confirmData',
-                   id_ppts: this.selectedPpts
-                })
-             });
+            const res = await fetch(GAS_URL, {
+               method: 'POST',
+               body: JSON.stringify({
+                  action: 'confirmData',
+                  id_ppts: this.selectedPpts
+               })
+            });
             const json = await res.json();
             if (json.status === 'success') {
                this.isConfirmed = true;
