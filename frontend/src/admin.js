@@ -6,6 +6,19 @@ window.Alpine = Alpine
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzswgz065wKuXgWMGUWL5UO9UvWS4k1vGxTfsbI138Phq7FQPuknncdOKVVSqS5atrF/exec';
 const USE_MOCK = false; 
+const FETCH_TIMEOUT_MS = 30000; // Timeout 30 detik
+
+// Helper: fetch dengan timeout otomatis menggunakan AbortController
+async function fetchWithTimeout(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+   const controller = new AbortController();
+   const timer = setTimeout(() => controller.abort(), timeoutMs);
+   try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      return res;
+   } finally {
+      clearTimeout(timer);
+   }
+}
 
 Alpine.data('adminData', () => ({
     isLoggedIn: false,
@@ -37,7 +50,7 @@ Alpine.data('adminData', () => ({
        
        this.isLoading = true;
        try {
-           const res = await fetch(GAS_URL + '?action=getUsers&t=' + new Date().getTime(), { redirect: 'follow' });
+           const res = await fetchWithTimeout(GAS_URL + '?action=getUsers&t=' + new Date().getTime(), { redirect: 'follow' });
            const json = await res.json();
            if (json.status === 'success') {
                const users = json.data;
@@ -53,16 +66,21 @@ Alpine.data('adminData', () => ({
            }
        } catch (e) {
            console.error(e);
-           alert('Gagal menghubungi server Google Apps Script.');
+           if (e.name === 'AbortError') {
+              alert('Koneksi ke server timeout. Server Google sedang lambat, silahkan coba lagi.');
+           } else {
+              alert('Gagal menghubungi server Google Apps Script.');
+           }
+       } finally {
+          this.isLoading = false;
        }
-       this.isLoading = false;
     },
     
     async loadInitialData() {
         this.isLoading = true;
         try {
             // Load PPTS & Hitung Statistik
-            const resPpts = await fetch(GAS_URL + '?action=getPPTS&t=' + new Date().getTime(), { redirect: 'follow' });
+            const resPpts = await fetchWithTimeout(GAS_URL + '?action=getPPTS&t=' + new Date().getTime(), { redirect: 'follow' });
             const jsonPpts = await resPpts.json();
             if (jsonPpts.status === 'success') {
                 this.mockPptsList = jsonPpts.data.map(p => ({
@@ -78,7 +96,7 @@ Alpine.data('adminData', () => ({
             }
             
             // Load Jenis Pupuk
-            const resPupuk = await fetch(GAS_URL + '?action=getPupuk&t=' + new Date().getTime(), { redirect: 'follow' });
+            const resPupuk = await fetchWithTimeout(GAS_URL + '?action=getPupuk&t=' + new Date().getTime(), { redirect: 'follow' });
             const jsonPupuk = await resPupuk.json();
             if (jsonPupuk.status === 'success') {
                 this.mockPupuk = jsonPupuk.data.map(p => ({
@@ -87,7 +105,7 @@ Alpine.data('adminData', () => ({
             }
             
             // Load Semua eRDKK untuk keperluan Laporan Export
-            const resErdkk = await fetch(GAS_URL + '?action=getERDKK&t=' + new Date().getTime(), { redirect: 'follow' });
+            const resErdkk = await fetchWithTimeout(GAS_URL + '?action=getERDKK&t=' + new Date().getTime(), { redirect: 'follow' });
             const jsonErdkk = await resErdkk.json();
             if (jsonErdkk.status === 'success') {
                 this.mockErdkkList = jsonErdkk.data.map(d => ({
